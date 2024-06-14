@@ -28,8 +28,8 @@ std::vector<int> tensor_to_int_bbox(torch::Tensor& input, int width, int height)
 
     for (int i = 0; i < boxes; ++i) {
         int x1 = static_cast<int>((input[i][0].item<float>() * width));
-        int y1 = static_cast<int>((input[i][1].item<float>() * width));
-        int x2 = static_cast<int>((input[i][2].item<float>() * height));
+        int y1 = static_cast<int>((input[i][1].item<float>() * height));
+        int x2 = static_cast<int>((input[i][2].item<float>() * width));
         int y2 = static_cast<int>((input[i][3].item<float>() * height));
 
         result.push_back(x1);
