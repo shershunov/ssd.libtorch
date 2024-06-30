@@ -6,4 +6,4 @@ torch::Tensor xywh_to_xyxy(const torch::Tensor& xywh);
 
 torch::Tensor iou(const torch::Tensor& boxes1, const torch::Tensor& boxes2);
 
-torch::Tensor normalize_image(cv::Mat& image, const int& resize_width, const int& resize_height, const torch::Device& device);
+torch::Tensor normalize_image(cv::Mat& image, const int& img_size);

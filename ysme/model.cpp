@@ -1,110 +1,125 @@
 #include "model.h"
 
-ConvBNSiLUImpl::ConvBNSiLUImpl(int in_channels, int out_channels, int kernel_size, int stride, int padding) {
+int64_t make_divisible(int64_t x, int64_t divisor) {
+    return (x + divisor / 2) / divisor * divisor;
+}
+
+ConvBNSiLU::ConvBNSiLU(int64_t in_channels, int64_t out_channels, int64_t kernel_size, int64_t stride, int64_t padding) {
     conv = register_module("conv", torch::nn::Conv2d(torch::nn::Conv2dOptions(in_channels, out_channels, kernel_size).stride(stride).padding(padding).bias(false)));
     bn = register_module("bn", torch::nn::BatchNorm2d(out_channels));
 }
 
-torch::Tensor ConvBNSiLUImpl::forward(torch::Tensor& x) {
+torch::Tensor ConvBNSiLU::forward(torch::Tensor& x) {
     return silu(bn->forward(conv->forward(x)));
 }
 
-Net::Net(int num_classes, int num_anchors) : num_classes(num_classes), num_anchors(num_anchors)  {
-    maxpool = register_module("max_pool", torch::nn::MaxPool2d(torch::nn::MaxPool2dOptions({ 2, 2 })));
+BottleNeck::BottleNeck(int64_t in_channels, int64_t out_channels, bool shortcut) : shortcut(shortcut) {
+    conv1 = register_module("conv1", std::make_shared<ConvBNSiLU>(in_channels, out_channels, 1, 1, 0));
+    conv2 = register_module("conv2", std::make_shared<ConvBNSiLU>(out_channels, out_channels, 3, 1, 1));
+}
 
-    conv1 = register_module("conv1", std::make_shared<ConvBNSiLUImpl>(3, 32, 4, 2, 2));
-    conv2 = register_module("conv2", std::make_shared<ConvBNSiLUImpl>(32, 64, 2, 2, 1));
-    conv3 = register_module("conv3", std::make_shared<ConvBNSiLUImpl>(64, 64, 2, 1, 1));
-    conv4 = register_module("conv4", std::make_shared<ConvBNSiLUImpl>(64, 64, 1, 1, 0));
-    conv5 = register_module("conv5", std::make_shared<ConvBNSiLUImpl>(64, 64, 1, 1, 0));
-    conv6 = register_module("conv6", std::make_shared<ConvBNSiLUImpl>(64, 64, 1, 1, 0));
-    conv7 = register_module("conv7", std::make_shared<ConvBNSiLUImpl>(64, 128, 1, 1, 0));
-    conv8 = register_module("conv8", std::make_shared<ConvBNSiLUImpl>(128, 128, 1, 1, 0));
-    conv9 = register_module("conv9", std::make_shared<ConvBNSiLUImpl>(128, 128, 1, 1, 0));
-    conv10 = register_module("conv10", std::make_shared<ConvBNSiLUImpl>(128, 256, 1, 1, 0));
-    conv11 = register_module("conv11", std::make_shared<ConvBNSiLUImpl>(256, 256, 1, 1, 0));
-    conv12 = register_module("conv12", std::make_shared<ConvBNSiLUImpl>(256, 256, 1, 1, 0));
-    conv13 = register_module("conv13", std::make_shared<ConvBNSiLUImpl>(256, 512, 1, 1, 0));
-    conv14 = register_module("conv14", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv15 = register_module("conv15", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv16 = register_module("conv16", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv17 = register_module("conv17", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv18 = register_module("conv18", std::make_shared<ConvBNSiLUImpl>(512, 1024, 1, 1, 0));
-    conv19 = register_module("conv19", std::make_shared<ConvBNSiLUImpl>(1024, 1024, 1, 1, 0));
-    conv20 = register_module("conv20", std::make_shared<ConvBNSiLUImpl>(1024, 1024, 1, 1, 0));
-    conv21 = register_module("conv21", std::make_shared<ConvBNSiLUImpl>(1024, 1024, 1, 1, 0));
-    conv22 = register_module("conv22", std::make_shared<ConvBNSiLUImpl>(1024, 512, 1, 1, 0));
-    conv23 = register_module("conv23", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv24 = register_module("conv24", std::make_shared<ConvBNSiLUImpl>(512, 736, 1, 1, 0));
-    conv25 = register_module("conv25", std::make_shared<ConvBNSiLUImpl>(736, 736, 1, 1, 0));
-    conv26 = register_module("conv26", std::make_shared<ConvBNSiLUImpl>(736, 512, 1, 1, 0));
-    conv27 = register_module("conv27", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv28 = register_module("conv28", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv29 = register_module("conv29", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv30 = register_module("conv30", std::make_shared<ConvBNSiLUImpl>(512, 1024, 1, 1, 0));
-    conv31 = register_module("conv31", std::make_shared<ConvBNSiLUImpl>(1024, 1024, 1, 1, 0));
-    conv32 = register_module("conv32", std::make_shared<ConvBNSiLUImpl>(1024, 1024, 1, 1, 0));
-    conv33 = register_module("conv33", std::make_shared<ConvBNSiLUImpl>(1024, 512, 1, 1, 0));
-    conv34 = register_module("conv34", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv35 = register_module("conv35", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv36 = register_module("conv36", std::make_shared<ConvBNSiLUImpl>(512, 512, 1, 1, 0));
-    conv37 = register_module("conv37", std::make_shared<ConvBNSiLUImpl>(512, 1024, 1, 1, 0));
-    conv38 = register_module("conv38", std::make_shared<ConvBNSiLUImpl>(1024, 1024, 1, 1, 0));
-    conv39 = register_module("conv39", std::make_shared<ConvBNSiLUImpl>(1024, 1024, 1, 1, 0));
-    conv40 = register_module("conv40", std::make_shared<ConvBNSiLUImpl>(1024, 1024, 1, 1, 0));
+torch::Tensor BottleNeck::forward(torch::Tensor x) {
+    torch::Tensor y = conv1->forward(x);
+    y = conv2->forward(y);
+    if (shortcut) {
+        y += x;
+    }
+    return y;
+}
+
+C3::C3(int64_t in_channels, int64_t out_channels, int64_t num_bottlenecks, float depth_multiple, bool shortcut) {
+    num_bottlenecks = std::max(static_cast<int64_t>(std::round(num_bottlenecks * depth_multiple)), static_cast<int64_t>(1));
+    for (int64_t i = 0; i < num_bottlenecks; ++i) {
+        bottleneck_layers->push_back(BottleNeck(out_channels / 2, out_channels / 2, shortcut));
+    }
+    conv1 = register_module("conv1", std::make_shared<ConvBNSiLU>(in_channels, out_channels / 2, 1, 1, 0));
+    conv2 = register_module("conv2", std::make_shared<ConvBNSiLU>(in_channels, out_channels / 2, 1, 1, 0));
+    register_module("bottleneck_layers", bottleneck_layers);
+    conv3 = register_module("conv3", std::make_shared<ConvBNSiLU>(out_channels, out_channels, 1, 1, 0));
+}
+
+torch::Tensor C3::forward(torch::Tensor& x) {
+    torch::Tensor y1 = conv1->forward(x);
+    y1 = bottleneck_layers->forward(y1);
+    torch::Tensor y2 = conv2->forward(x);
+    torch::Tensor y = torch::cat({ y1, y2 }, 1);
+    return conv3->forward(y);
+}
+
+Net::Net(int64_t num_classes, int64_t num_anchors, float depth_multiple, float width_multiple) : num_classes(num_classes), num_anchors(num_anchors)  {
+    int64_t p1_out_chanels = make_divisible(64 * width_multiple, 8);
+    p1 = register_module("p1", std::make_shared<ConvBNSiLU>(3, p1_out_chanels, 6, 2, 2));
+
+    int64_t p2_out_chanels = make_divisible(128 * width_multiple, 8);
+    p2 = register_module("p2", std::make_shared<ConvBNSiLU>(p1_out_chanels, p2_out_chanels, 3, 2, 1));
+
+    c3_1 = register_module("c3_1", std::make_shared<C3>(p2_out_chanels, p2_out_chanels, 3, depth_multiple, true));
+
+    int64_t p3_out_chanels = make_divisible(256 * width_multiple, 8);
+    p3 = register_module("p3", std::make_shared<ConvBNSiLU>(p2_out_chanels, p3_out_chanels, 3, 2, 1));
+
+    c3_2 = register_module("c3_2", std::make_shared<C3>(p3_out_chanels, p3_out_chanels, 6, depth_multiple, true));
+
+    int64_t p4_out_chanels = make_divisible(512 * width_multiple, 8);
+    p4 = register_module("p4", std::make_shared<ConvBNSiLU>(p3_out_chanels, p4_out_chanels, 3, 2, 1));
+
+    c3_3 = register_module("c3_3", std::make_shared<C3>(p4_out_chanels, p4_out_chanels, 9, depth_multiple, true));
+
+    int64_t p5_out_chanels = make_divisible(1024 * width_multiple, 8);
+    p5 = register_module("p5", std::make_shared<ConvBNSiLU>(p4_out_chanels, p5_out_chanels, 3, 2, 1));
+
+    c3_4 = register_module("c3_4", std::make_shared<C3>(p5_out_chanels, p5_out_chanels, 3, depth_multiple, true));
+
+    int64_t p6_out_chanels = make_divisible(512 * width_multiple, 8);
+    p6 = register_module("p6", std::make_shared<ConvBNSiLU>(p5_out_chanels, p6_out_chanels, 1, 1, 0));
+
+    c3_5 = register_module("c3_5", std::make_shared<C3>(p6_out_chanels, p6_out_chanels, 3, depth_multiple, true));
+
+    int64_t p7_out_chanels = make_divisible(256 * width_multiple, 8);
+    p7 = register_module("p7", std::make_shared<ConvBNSiLU>(p6_out_chanels, p7_out_chanels, 1, 1, 0));
+
+    c3_6 = register_module("c3_6", std::make_shared<C3>(p7_out_chanels, p7_out_chanels, 3, depth_multiple, true));
+
+    int64_t p8_out_chanels = make_divisible(256 * width_multiple, 8);
+    p8 = register_module("p8", std::make_shared<ConvBNSiLU>(p7_out_chanels, p8_out_chanels, 1, 1, 0));
+    p9 = register_module("p9", std::make_shared<ConvBNSiLU>(p8_out_chanels, p8_out_chanels, 1, 1, 0));
 
     loc_layers = register_module("loc_layers", torch::nn::ModuleList());
     conf_layers = register_module("conf_layers", torch::nn::ModuleList());
 
     for (int i = 0; i < num_anchors; ++i) {
-        loc_layers->push_back(register_module("loc_" + std::to_string(i), torch::nn::Conv2d(1024, 4 * num_anchors, 1)));
-        conf_layers->push_back(register_module("conf_" + std::to_string(i), torch::nn::Conv2d(1024, num_classes * num_anchors, 1)));
+        loc_layers->push_back(register_module("loc_" + std::to_string(i), torch::nn::Conv2d(p8_out_chanels, 4 * num_anchors, 1)));
+        conf_layers->push_back(register_module("conf_" + std::to_string(i), torch::nn::Conv2d(p8_out_chanels, num_classes * num_anchors, 1)));
     }
 }
 
 std::pair<torch::Tensor, torch::Tensor> Net::forward(torch::Tensor& x) {
-    x = conv1->forward(x);
-    x = conv2->forward(x);
-    x = maxpool->forward(x);
+    x = p1->forward(x);
+    x = p2->forward(x);
+    x = c3_1->forward(x);
 
-    x = conv3->forward(x);
-    x = conv4->forward(x);
-    x = conv5->forward(x);
-    x = conv6->forward(x);
-    x = maxpool->forward(x);
+    x = p3->forward(x);
+    x = c3_2->forward(x);
 
-    x = conv7->forward(x);
-    x = conv8->forward(x);
-    x = conv9->forward(x);
-    x = conv10->forward(x);
-    x = maxpool->forward(x);
+    x = p4->forward(x);
+    x = c3_3->forward(x);
 
-    x = conv11->forward(x);
-    x = conv12->forward(x);
-    x = conv13->forward(x);
-    x = conv14->forward(x);
-    x = conv15->forward(x);
-    x = conv16->forward(x);
-    x = maxpool->forward(x);
+    x = p5->forward(x);
+    x = c3_4->forward(x);
 
-    x = conv17->forward(x);
-    x = conv18->forward(x);
-    x = conv19->forward(x);
-    x = conv20->forward(x);
-    x = conv21->forward(x);
-    x = conv22->forward(x);
-    x = conv23->forward(x);
-    x = conv24->forward(x);
-    x = conv25->forward(x);
-    x = conv26->forward(x);
-    x = conv27->forward(x);
-    x = conv28->forward(x);
-    x = conv29->forward(x);
-    x = conv30->forward(x);
-    x = conv31->forward(x);
+    x = p6->forward(x);
+
+    x = c3_5->forward(x);
+
+    x = p7->forward(x);
+
+    x = c3_6->forward(x);
+
+    x = p8->forward(x);
+    x = p9->forward(x);
 
     std::vector<torch::Tensor> loc_preds, conf_preds;
-    for (uint16_t i = 0; i < loc_layers->size(); ++i) {
+    for (int i = 0; i < loc_layers->size(); ++i) {
         loc_preds.push_back((*loc_layers)[i]->as<torch::nn::Conv2d>()->forward(x));
         conf_preds.push_back((*conf_layers)[i]->as<torch::nn::Conv2d>()->forward(x));
     }

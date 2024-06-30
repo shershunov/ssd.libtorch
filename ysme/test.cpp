@@ -20,17 +20,17 @@ cv::Mat plot_box(const int x[4], cv::Mat& img, const std::string& label, int lin
     return img;
 }
 
-std::vector<int> tensor_to_int_bbox(torch::Tensor& input, int width, int height) {
+std::vector<int> tensor_to_int_bbox(torch::Tensor& input, int img_size) {
     int boxes = input.size(0);
 
     std::vector<int> result;
     result.reserve(boxes * 4);
 
     for (int i = 0; i < boxes; ++i) {
-        int x1 = static_cast<int>((input[i][0].item<float>() * width));
-        int y1 = static_cast<int>((input[i][1].item<float>() * height));
-        int x2 = static_cast<int>((input[i][2].item<float>() * width));
-        int y2 = static_cast<int>((input[i][3].item<float>() * height));
+        int x1 = static_cast<int>((input[i][0].item<float>() * img_size));
+        int y1 = static_cast<int>((input[i][1].item<float>() * img_size));
+        int x2 = static_cast<int>((input[i][2].item<float>() * img_size));
+        int y2 = static_cast<int>((input[i][3].item<float>() * img_size));
 
         result.push_back(x1);
         result.push_back(y1);
@@ -41,19 +41,23 @@ std::vector<int> tensor_to_int_bbox(torch::Tensor& input, int width, int height)
     return result;
 }
 
-void test_model(Net& model, torch::Device& device, int width, int height) {
+void test_model(Net& model, torch::Device& device, int img_size, std::string dataset_path) {
     model.eval();
-    std::string abc = "-";
-    std::string num_photo;
-    while (true) {
-        std::cout << std::endl;
-        std::cin >> num_photo;
-        cv::Mat image = cv::imread("C:/Users/dev/source/repos/ysme/dataset/images/train/" + num_photo + ".png", cv::IMREAD_COLOR);
-        torch::Tensor test_img = normalize_image(image, width, height, device).unsqueeze(0);
-        auto [boxes, scores] = model.forward(test_img);
-        auto boxes_xyxy = xywh_to_xyxy(boxes.squeeze(0));
+    std::string label = "";
+    std::string test_img;
 
-        auto boxes_int = tensor_to_int_bbox(boxes_xyxy, width, height);
+    while (true) {
+        std::cout << "Photo for detection: ";
+        std::cin >> test_img;
+
+        cv::Mat image = cv::imread(dataset_path + "images/train/" + test_img + ".png", cv::IMREAD_COLOR);
+        torch::Tensor test_img = normalize_image(image, img_size).to(device).unsqueeze(0);
+
+        auto [boxes, scores] = model.forward(test_img);
+        torch::Tensor boxes_xyxy = xywh_to_xyxy(boxes.squeeze(0));
+
+        auto boxes_int = tensor_to_int_bbox(boxes_xyxy, img_size);
+
         for (int i = 0; i < boxes_int.size(); i += 4) {
             int box[4];
             box[0] = boxes_int[i];
@@ -61,9 +65,11 @@ void test_model(Net& model, torch::Device& device, int width, int height) {
             box[2] = boxes_int[i + 2];
             box[3] = boxes_int[i + 3];
 
-            image = plot_box(box, image, abc, 1, cv::Scalar(0, 165, 255));
+            image = plot_box(box, image, label, 1, cv::Scalar(0, 165, 255));
         }
         cv::imshow("window", image);
-        cv::waitKey(1);
+        if (cv::waitKey(1) == 27) {
+            break;
+        }
     }
 }

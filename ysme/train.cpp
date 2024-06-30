@@ -15,7 +15,7 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> collate_fn(std::vector<tor
         targets.push_back(example.target);
     }
 
-    return { torch::stack(images, 0), targets };
+    return { torch::stack(images, 0).to(device), targets };
 }
 
 void save_model(const Net& model, const std::string& filename) {
@@ -57,7 +57,7 @@ void load_model(Net& model, const std::string& filename) {
 }
 
 std::vector<float> train_model(Net& model, torch::Device& device, std::vector<torch::Tensor>& images, std::vector<torch::Tensor>& targets,
-            const int& num_epochs, const int& batch_size, const float& learning_rate, const bool& shuffle_dataset) {
+            const int& num_epochs, const int& batch_size, const float& learning_rate, const int& num_workers) {
     torch::Tensor loss;
     size_t free_mem, total_mem;
     float used_mem, epoch_loss;
@@ -66,14 +66,15 @@ std::vector<float> train_model(Net& model, torch::Device& device, std::vector<to
 
     model.train();
 
-    auto custom_dataset = CustomDataset(images, targets, shuffle_dataset);
-    auto data_loader = torch::data::make_data_loader<torch::data::samplers::SequentialSampler>(
+    auto custom_dataset = CustomDataset(images, targets);
+    auto data_loader = torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
         custom_dataset,
-        torch::data::DataLoaderOptions().batch_size(batch_size)
-    ); 
+        torch::data::DataLoaderOptions().batch_size(batch_size).workers(num_workers)
+    );
     float best_loss = std::numeric_limits<float>::infinity();
 
     int num_batches = (images.size() - 1) / batch_size + 1;
+    std::cout << "Num batches: " << num_batches << std::endl;
 
     for (int epoch = 0; epoch < num_epochs; ++epoch) {
         epoch_loss = 0;
@@ -101,9 +102,9 @@ std::vector<float> train_model(Net& model, torch::Device& device, std::vector<to
         epoch_loss /= num_batches;
         losses_train.push_back(epoch_loss);
 
-        if (epoch_loss < best_loss) {
+        if (epoch_loss < best_loss && epoch != 1) {
             best_loss = epoch_loss;
-            SetConsoleTitle(("Best loss: " + std::to_string(best_loss)).c_str());
+            SetConsoleTitle(("Best loss: " + std::to_string(best_loss) + " on " + std::to_string(epoch + 1) + " epoch").c_str());
             save_model(model, "best.pt");
         }
         std::cout << " Loss: " << std::round(epoch_loss * 10000) / 10000 << std::endl << std::endl;

@@ -1,28 +1,45 @@
 #pragma once
 #include <torch/torch.h>
 
-struct ConvBNSiLUImpl : torch::nn::Module {
+struct ConvBNSiLU : torch::nn::Module {
     torch::nn::Conv2d conv{ nullptr };
     torch::nn::BatchNorm2d bn{ nullptr };
     torch::nn::SiLU silu{};
 
-    ConvBNSiLUImpl(int in_channels, int out_channels, int kernel_size, int stride, int padding = 1);
+    ConvBNSiLU(int64_t in_channels, int64_t out_channels, int64_t kernel_size, int64_t stride, int64_t padding = 1);
+
+    torch::Tensor forward(torch::Tensor& x);
+};
+
+struct BottleNeck : torch::nn::Module {
+    std::shared_ptr<ConvBNSiLU> conv1, conv2;
+    bool shortcut;
+
+    BottleNeck(int64_t in_channels, int64_t out_channels, bool shortcut);
+
+    torch::Tensor forward(torch::Tensor x);
+};
+
+struct C3 : torch::nn::Module {
+    std::shared_ptr<ConvBNSiLU> conv1, conv2, conv3;
+    torch::nn::Sequential bottleneck_layers;
+
+    C3(int64_t in_channels, int64_t out_channels, int64_t num_bottlenecks, float depth_multiple, bool shortcut);
 
     torch::Tensor forward(torch::Tensor& x);
 };
 
 class Net : public torch::nn::Module {
 public:
-    Net(const int num_classes, const int num_anchors);
+    Net(int64_t num_classes, int64_t num_anchors, float depth_multiple, float width_multiple);
 
     std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor& x);
 
 private: 
-    int num_classes;
-    int num_anchors;
+    int64_t num_classes;
+    int64_t num_anchors;
     torch::nn::ModuleList loc_layers, conf_layers;
     torch::nn::MaxPool2d maxpool{ nullptr };
-    std::shared_ptr<ConvBNSiLUImpl> conv1, conv2, conv3, conv4, conv5, conv6, conv7, conv8, conv9, conv10,
-        conv11, conv12, conv13, conv14, conv15, conv16, conv17, conv18, conv19, conv20, conv21, conv22, conv23, conv24, conv25, conv26, conv27, conv28, conv29, conv30, conv31, 
-        conv32, conv33, conv34, conv35, conv36, conv37, conv38, conv39, conv40, extras, loc, conf;
+    std::shared_ptr<ConvBNSiLU> p1, p2, p3, p4, p5, p6, p7, p8, p9;
+    std::shared_ptr<C3> c3_1, c3_2, c3_3, c3_4, c3_5, c3_6;
 };

@@ -7,30 +7,34 @@
 
 int main() {
     try {
-        const int EPOCHS = 200;
-        const int batch_size = 1;
-        const int width = 640;
-        const int height = 640;
+        const int EPOCHS = 2000;
+        const int batch_size = 56;
+        const int img_size = 640;
         const int num_classes = 4;
         const int num_anchors = 3;
         const float learning_rate = 0.0001F;
-        const bool shuffle_dataset = true;
-        std::string dataset_path = "C:/datasets/data";
+
+        float depth_multiple = 0.33F;
+        float width_multiple = 0.25F;
+
+        std::string dataset_path = "C:/datasets/data/";
+        const int num_workers = 6;
 
         torch::Device device(torch::kCPU);
         if (torch::cuda::is_available()) {
             device = torch::Device(torch::kCUDA);
         }
+        torch::manual_seed(42);
 
-        Net model(num_classes, num_anchors);
+        Net model(num_classes, num_anchors, depth_multiple, width_multiple);
         model.to(device);
 
-        auto [images, targets] = get_train_data(dataset_path, width, height, device, num_classes);
-
-        std::vector<float> losses_train = train_model(model, device, images, targets, EPOCHS, batch_size, learning_rate, shuffle_dataset);
-
         //load_model(model, "best.pt");
-        test_model(model, device, width, height);
+        auto [images, targets] = get_train_data(dataset_path, img_size, device, num_classes);
+
+        std::vector<float> losses_train = train_model(model, device, images, targets, EPOCHS, batch_size, learning_rate, num_workers);
+
+        test_model(model, device, img_size, dataset_path);
     }
     catch (const torch::Error& error) {
         std::cerr << "LibTorch error: " << error.what() << std::endl;

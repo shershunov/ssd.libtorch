@@ -1,7 +1,6 @@
 #include "loss.h"
 #include "utils.h"
 
-
 torch::Tensor ssd_loss(
     const torch::Tensor& pred_boxes,
     const torch::Tensor& pred_labels,
@@ -29,25 +28,25 @@ torch::Tensor ssd_loss(
     for (int i = 0; i < num_batches; ++i) {
         torch::Tensor current_true_boxes = xywh_to_xyxy(true_boxes[i]); // [num_real_boxes, 4] (xyxy)
         torch::Tensor current_true_labels = true_labels[i]; // [num_real_boxes] class indices
-        torch::Tensor current_pred_boxes = xywh_to_xyxy(pred_boxes[i]); // [num_anchors, 4] (xyxy)
-        torch::Tensor current_pred_labels = pred_labels[i]; // [num_anchors, num_classes] class probabilities
+        torch::Tensor current_pred_boxes = xywh_to_xyxy(pred_boxes[i]); // [num_pred_boxes, 4] (xyxy)
+        torch::Tensor current_pred_labels = pred_labels[i]; // [num_pred_boxes, num_classes] class probabilities
 
-        auto ious = iou(current_pred_boxes, current_true_boxes); // [num_anchors, num_real_boxes]
-        auto max_iou_results = ious.max(1);
-        auto max_iou = std::get<0>(max_iou_results);
-        auto max_iou_idx = std::get<1>(max_iou_results);
+        torch::Tensor ious = iou(current_pred_boxes, current_true_boxes); // [num_anchors, num_real_boxes]
+        std::tuple< torch::Tensor, torch::Tensor > max_iou_results = ious.max(1);
+        torch::Tensor max_iou = std::get<0>(max_iou_results);
+        torch::Tensor max_iou_idx = std::get<1>(max_iou_results);
 
-        auto positive_mask = max_iou >= overlap_threshold;
-        auto negative_mask = max_iou < overlap_threshold;
+        torch::Tensor positive_mask = max_iou >= overlap_threshold;
+        torch::Tensor negative_mask = max_iou < overlap_threshold;
 
         int num_positives = positive_mask.sum().item<int>();
         int num_negatives = negative_mask.sum().item<int>();
 
         if (num_positives > 0) {
-            auto positive_pred_boxes = current_pred_boxes.index({ positive_mask });
-            auto positive_true_boxes = current_true_boxes.index({ max_iou_idx.index({ positive_mask }) });
+            torch::Tensor positive_pred_boxes = current_pred_boxes.index({ positive_mask });
+            torch::Tensor positive_true_boxes = current_true_boxes.index({ max_iou_idx.index({ positive_mask }) });
 
-            auto loc_loss = torch::nn::functional::smooth_l1_loss(
+            torch::Tensor loc_loss = torch::nn::functional::smooth_l1_loss(
                 positive_pred_boxes,
                 positive_true_boxes,
                 torch::nn::functional::SmoothL1LossFuncOptions().reduction(torch::kSum)
@@ -55,10 +54,10 @@ torch::Tensor ssd_loss(
 
             total_loc_loss += loc_loss_weight * loc_loss;
 
-            auto positive_pred_labels = current_pred_labels.index({ positive_mask });
-            auto positive_true_labels = current_true_labels.index({ max_iou_idx.index({ positive_mask }) }).to(torch::kLong);
+            torch::Tensor positive_pred_labels = current_pred_labels.index({ positive_mask });
+            torch::Tensor positive_true_labels = current_true_labels.index({ max_iou_idx.index({ positive_mask }) }).to(torch::kLong);
 
-            auto conf_loss_pos = torch::nn::functional::cross_entropy(
+            torch::Tensor conf_loss_pos = torch::nn::functional::cross_entropy(
                 positive_pred_labels,
                 positive_true_labels,
                 torch::nn::functional::CrossEntropyFuncOptions().reduction(torch::kSum)
@@ -68,9 +67,9 @@ torch::Tensor ssd_loss(
         }
 
         if (num_negatives > 0) {
-            auto negative_pred_labels = current_pred_labels.index({ negative_mask });
+            torch::Tensor negative_pred_labels = current_pred_labels.index({ negative_mask });
 
-            auto conf_loss_neg_all = torch::nn::functional::cross_entropy(
+            torch::Tensor conf_loss_neg_all = torch::nn::functional::cross_entropy(
                 negative_pred_labels,
                 torch::zeros({ negative_pred_labels.size(0) }, torch::TensorOptions().dtype(torch::kLong).device(device)),
                 torch::nn::functional::CrossEntropyFuncOptions().reduction(torch::kNone)
@@ -83,15 +82,15 @@ torch::Tensor ssd_loss(
                 num_neg = std::min(static_cast<int>(neg_pos_ratio), static_cast<int>(sorted_neg_indices.size(0)));
             }
 
-            auto hard_neg_indices = sorted_neg_indices.slice(0, 0, num_neg);
-            auto hard_neg_conf_loss = conf_loss_neg_all.index({ hard_neg_indices });
+            torch::Tensor hard_neg_indices = sorted_neg_indices.slice(0, 0, num_neg);
+            torch::Tensor hard_neg_conf_loss = conf_loss_neg_all.index({ hard_neg_indices });
 
-            auto conf_loss_neg = hard_neg_conf_loss.sum();
+            torch::Tensor conf_loss_neg = hard_neg_conf_loss.sum();
 
             total_conf_loss += conf_loss_weight * conf_loss_neg;
         }
     }
 
-    auto total_loss = total_loc_loss + total_conf_loss;
+    torch::Tensor total_loss = total_loc_loss + total_conf_loss;
     return total_loss;
 }

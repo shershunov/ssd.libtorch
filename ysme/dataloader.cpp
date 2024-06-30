@@ -3,11 +3,8 @@
 #include <fstream>
 #include <random>
 
-CustomDataset::CustomDataset(std::vector<torch::Tensor>& images, std::vector<torch::Tensor>& targets, const bool& shuffle) 
+CustomDataset::CustomDataset(std::vector<torch::Tensor>& images, std::vector<torch::Tensor>& targets) 
     : images(images), targets(targets) {
-    if (shuffle) {
-        shuffleDataset();
-    }
 }
 
 torch::data::Example<> CustomDataset::get(size_t index) {
@@ -16,28 +13,6 @@ torch::data::Example<> CustomDataset::get(size_t index) {
 
 torch::optional<size_t> CustomDataset::size() const {
     return images.size();
-}
-
-void CustomDataset::shuffleDataset() {
-    std::vector<size_t> indices(this->images.size());
-    std::iota(indices.begin(), indices.end(), 0);
-
-    std::random_device rd;
-    std::mt19937 g(rd());
-
-    std::shuffle(indices.begin(), indices.end(), g);
-
-    std::vector<torch::Tensor> shuffledImages(this->images.size());
-    std::vector<torch::Tensor> shuffledTargets(this->targets.size());
-
-    for (int i = 0; i < indices.size(); ++i) {
-        size_t index = indices[i];
-        shuffledImages[i] = this->images[index];
-        shuffledTargets[i] = this->targets[index];
-    }
-
-    this->images.swap(shuffledImages);
-    this->targets.swap(shuffledTargets);
 }
 
 torch::Tensor get_target_data(std::ifstream& file) {
@@ -54,7 +29,7 @@ torch::Tensor get_target_data(std::ifstream& file) {
     return torch::stack(lines);
 }
 
-std::pair<std::vector<torch::Tensor>, std::vector<torch::Tensor>> get_train_data(const std::string& directory_path, const int& resize_width, const int& resize_height, const torch::Device& device, const int& num_classes) {
+std::pair<std::vector<torch::Tensor>, std::vector<torch::Tensor>> get_train_data(const std::string& directory_path, const int& img_size, const torch::Device& device, const int& num_classes) {
     std::vector<torch::Tensor> images, labels;
     cv::Mat image; 
     std::string path;
@@ -78,7 +53,7 @@ std::pair<std::vector<torch::Tensor>, std::vector<torch::Tensor>> get_train_data
             continue;
         }
 
-        images.push_back(normalize_image(image, resize_width, resize_height, device));
+        images.push_back(normalize_image(image, img_size));
         labels.push_back(get_target_data(file));
     }
 
