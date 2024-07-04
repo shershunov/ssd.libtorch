@@ -44,50 +44,50 @@ torch::Tensor C3::forward(torch::Tensor& x) {
 }
 
 Net::Net(int64_t num_classes, int64_t num_anchors, float depth_multiple, float width_multiple) : num_classes(num_classes), num_anchors(num_anchors)  {
-    int64_t p1_out_chanels = make_divisible(64 * width_multiple, 8);
-    p1 = register_module("p1", std::make_shared<ConvBNSiLU>(3, p1_out_chanels, 6, 2, 2));
+    int64_t p1_out_channels = make_divisible(64 * width_multiple, 8);
+    p1 = register_module("p1", std::make_shared<ConvBNSiLU>(3, p1_out_channels, 6, 2, 2));
 
-    int64_t p2_out_chanels = make_divisible(128 * width_multiple, 8);
-    p2 = register_module("p2", std::make_shared<ConvBNSiLU>(p1_out_chanels, p2_out_chanels, 3, 2, 1));
+    int64_t p2_out_channels = make_divisible(128 * width_multiple, 8);
+    p2 = register_module("p2", std::make_shared<ConvBNSiLU>(p1_out_channels, p2_out_channels, 3, 2, 1));
 
-    c3_1 = register_module("c3_1", std::make_shared<C3>(p2_out_chanels, p2_out_chanels, 3, depth_multiple));
+    c3_1 = register_module("c3_1", std::make_shared<C3>(p2_out_channels, p2_out_channels, 3, depth_multiple));
 
-    int64_t p3_out_chanels = make_divisible(256 * width_multiple, 8);
-    p3 = register_module("p3", std::make_shared<ConvBNSiLU>(p2_out_chanels, p3_out_chanels, 3, 2, 1));
+    int64_t p3_out_channels = make_divisible(256 * width_multiple, 8);
+    p3 = register_module("p3", std::make_shared<ConvBNSiLU>(p2_out_channels, p3_out_channels, 3, 2, 1));
 
-    c3_2 = register_module("c3_2", std::make_shared<C3>(p3_out_chanels, p3_out_chanels, 6, depth_multiple));
+    c3_2 = register_module("c3_2", std::make_shared<C3>(p3_out_channels, p3_out_channels, 6, depth_multiple));
 
-    int64_t p4_out_chanels = make_divisible(512 * width_multiple, 8);
-    p4 = register_module("p4", std::make_shared<ConvBNSiLU>(p3_out_chanels, p4_out_chanels, 3, 2, 1));
+    int64_t p4_out_channels = make_divisible(512 * width_multiple, 8);
+    p4 = register_module("p4", std::make_shared<ConvBNSiLU>(p3_out_channels, p4_out_channels, 3, 2, 1));
 
-    c3_3 = register_module("c3_3", std::make_shared<C3>(p4_out_chanels, p4_out_chanels, 9, depth_multiple));
+    c3_3 = register_module("c3_3", std::make_shared<C3>(p4_out_channels, p4_out_channels, 9, depth_multiple));
 
-    int64_t p5_out_chanels = make_divisible(1024 * width_multiple, 8);
-    p5 = register_module("p5", std::make_shared<ConvBNSiLU>(p4_out_chanels, p5_out_chanels, 3, 2, 1));
+    int64_t p5_out_channels = make_divisible(1024 * width_multiple, 8);
+    p5 = register_module("p5", std::make_shared<ConvBNSiLU>(p4_out_channels, p5_out_channels, 3, 2, 1));
 
-    c3_4 = register_module("c3_4", std::make_shared<C3>(p5_out_chanels, p5_out_chanels, 3, depth_multiple));
+    c3_4 = register_module("c3_4", std::make_shared<C3>(p5_out_channels, p5_out_channels, 3, depth_multiple));
 
-    int64_t p6_out_chanels = make_divisible(1024 * width_multiple, 8);
-    p6 = register_module("p6", std::make_shared<ConvBNSiLU>(p5_out_chanels, p6_out_chanels, 1, 1, 0));
+    int64_t p6_out_channels = make_divisible(1024 * width_multiple, 8);
+    p6 = register_module("p6", std::make_shared<ConvBNSiLU>(p5_out_channels, p6_out_channels, 1, 1, 0));
 
-    c3_5 = register_module("c3_5", std::make_shared<C3>(p6_out_chanels, p6_out_chanels, 3, depth_multiple));
+    c3_5 = register_module("c3_5", std::make_shared<C3>(p6_out_channels, p6_out_channels, 3, depth_multiple));
 
-    int64_t p7_out_chanels = make_divisible(1024 * width_multiple, 8);
-    p7 = register_module("p7", std::make_shared<ConvBNSiLU>(p6_out_chanels, p7_out_chanels, 1, 1, 0));
+    int64_t p7_out_channels = make_divisible(1024 * width_multiple, 8);
+    p7 = register_module("p7", std::make_shared<ConvBNSiLU>(p6_out_channels, p7_out_channels, 1, 1, 0));
 
-    c3_6 = register_module("c3_6", std::make_shared<C3>(p7_out_chanels, p7_out_chanels, 3, depth_multiple));
+    c3_6 = register_module("c3_6", std::make_shared<C3>(p7_out_channels, p7_out_channels, 3, depth_multiple));
 
-    int64_t p8_out_chanels = make_divisible(1024 * width_multiple, 8);
-    p8 = register_module("p8", std::make_shared<ConvBNSiLU>(p7_out_chanels, p8_out_chanels, 1, 1, 0));
-    p9 = register_module("p9", std::make_shared<ConvBNSiLU>(p8_out_chanels, p8_out_chanels, 1, 1, 0));
-    p10 = register_module("p10", std::make_shared<ConvBNSiLU>(p8_out_chanels, p8_out_chanels, 1, 1, 0));
+    int64_t p8_out_channels = make_divisible(1024 * width_multiple, 8);
+    p8 = register_module("p8", std::make_shared<ConvBNSiLU>(p7_out_channels, p8_out_channels, 1, 1, 0));
+    p9 = register_module("p9", std::make_shared<ConvBNSiLU>(p8_out_channels, p8_out_channels, 1, 1, 0));
+    p10 = register_module("p10", std::make_shared<ConvBNSiLU>(p8_out_channels, p8_out_channels, 1, 1, 0));
 
     loc_layers = register_module("loc_layers", torch::nn::ModuleList());
     conf_layers = register_module("conf_layers", torch::nn::ModuleList());
 
     for (int i = 0; i < num_anchors; ++i) {
-        loc_layers->push_back(register_module("loc_" + std::to_string(i), torch::nn::Conv2d(p8_out_chanels, 4 * num_anchors, 1)));
-        conf_layers->push_back(register_module("conf_" + std::to_string(i), torch::nn::Conv2d(p8_out_chanels, num_classes * num_anchors, 1)));
+        loc_layers->push_back(register_module("loc_" + std::to_string(i), torch::nn::Conv2d(p8_out_channels, 4 * num_anchors, 1)));
+        conf_layers->push_back(register_module("conf_" + std::to_string(i), torch::nn::Conv2d(p8_out_channels, num_classes * num_anchors, 1)));
     }
 }
 

@@ -10,7 +10,7 @@ int main() {
         const int batch_size = 56;
         const int img_size = 640;
         const int num_classes = 4;
-        const int num_anchors = 3;
+        const int num_anchors = 2;
         const float learning_rate = 0.0001F;
 
         float depth_multiple = 0.33F;
