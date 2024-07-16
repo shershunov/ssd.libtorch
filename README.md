@@ -67,6 +67,8 @@ data/
       1.txt
     val/
       1.txt
+  test/
+    1.png
 ```
 #### labels.txt example
 ```
