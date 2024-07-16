@@ -1,7 +1,6 @@
 #include "test.h"
 #include "utils.h"
 #include <filesystem>
-#include <iostream>
 #include <fstream>
 #include <unordered_map>
 
@@ -67,6 +66,11 @@ void test_model(Net& model, torch::Device& device, int img_size, std::string dat
     int a = 0;
     std::string input_dir = dataset_path + "images/train/";
     std::string output_dir = dataset_path + "test/";
+
+    if (!std::filesystem::exists(output_dir)) {
+        std::filesystem::create_directory(output_dir);
+    }
+
     std::unordered_map<int, std::string> labels = get_labels(dataset_path + "labels.txt");
 
     for (const auto& entry : std::filesystem::directory_iterator(input_dir)) {
@@ -83,6 +87,7 @@ void test_model(Net& model, torch::Device& device, int img_size, std::string dat
         torch::Tensor test_img = normalize_image(image, img_size).to(device).unsqueeze(0);
 
         auto [boxes, scores] = model.forward(test_img);
+
         torch::Tensor boxes_xyxy = xywh_to_xyxy(boxes.squeeze(0));
         auto keep_indices = non_max_suppression(boxes_xyxy, scores.squeeze(0), 0.7);
         torch::Tensor keep_indices_tensor = torch::tensor(keep_indices).to(device);

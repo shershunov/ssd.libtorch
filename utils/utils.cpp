@@ -25,34 +25,6 @@ torch::Tensor xywh_to_xyxy(const torch::Tensor& xywh) {
     return torch::cat({ x1, y1, x2, y2 }, 1);
 }
 
-torch::Tensor iou(const torch::Tensor& boxesA, const torch::Tensor& boxesB) {
-    torch::Tensor boxesA_exp = boxesA.unsqueeze(1);
-    torch::Tensor boxesB_exp = boxesB.unsqueeze(0);
-
-    torch::Tensor xA = torch::max(boxesA_exp.select(2, 0), boxesB_exp.select(2, 0));
-    torch::Tensor yA = torch::max(boxesA_exp.select(2, 1), boxesB_exp.select(2, 1));
-    torch::Tensor xB = torch::min(boxesA_exp.select(2, 2), boxesB_exp.select(2, 2));
-    torch::Tensor yB = torch::min(boxesA_exp.select(2, 3), boxesB_exp.select(2, 3));
-
-    torch::Tensor interWidth = torch::clamp(xB - xA + 1, 0, std::numeric_limits<float>::infinity());
-    torch::Tensor interHeight = torch::clamp(yB - yA + 1, 0, std::numeric_limits<float>::infinity());
-    torch::Tensor interArea = interWidth * interHeight;
-
-    torch::Tensor boxesAArea = (boxesA.select(1, 2) - boxesA.select(1, 0) + 1) * (boxesA.select(1, 3) - boxesA.select(1, 1) + 1);
-    torch::Tensor boxesBArea = (boxesB.select(1, 2) - boxesB.select(1, 0) + 1) * (boxesB.select(1, 3) - boxesB.select(1, 1) + 1);
-
-    torch::Tensor boxesAArea_exp = boxesAArea.unsqueeze(1);
-    torch::Tensor boxesBArea_exp = boxesBArea.unsqueeze(0);
-
-    torch::Tensor unionArea = boxesAArea_exp + boxesBArea_exp - interArea;
-
-    unionArea = torch::max(unionArea, torch::ones_like(unionArea) * 1e-6);
-
-    torch::Tensor iou = interArea / unionArea;
-
-    return iou;
-}
-
 float IoU(const torch::Tensor& box1, const torch::Tensor& box2) {
     auto x1 = std::max(box1[0].item<float>(), box2[0].item<float>());
     auto y1 = std::max(box1[1].item<float>(), box2[1].item<float>());

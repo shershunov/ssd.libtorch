@@ -1,5 +1,4 @@
-﻿#include <iostream>
-#include "utils/test.h"
+﻿#include "utils/test.h"
 #include "utils/dataloader.h"
 #include "model/model.h"
 #include "train/train.h"

@@ -29,27 +29,27 @@ torch::Tensor get_target_data(std::ifstream& file) {
     return torch::stack(lines);
 }
 
-std::pair<std::vector<torch::Tensor>, std::vector<torch::Tensor>> get_train_data(const std::string& directory_path, const int& img_size, const torch::Device& device, const int& num_classes) {
+std::pair<std::vector<torch::Tensor>, std::vector<torch::Tensor>> get_train_data(const std::string& dataset_path, const int& img_size, const torch::Device& device, const int& num_classes) {
     std::vector<torch::Tensor> images, labels;
     cv::Mat image; 
-    std::string path;
+    std::string path_to_image;
 
-    const std::string image_dir = directory_path + "images/train/";
-    const std::string label_dir = directory_path + "labels/train/";
+    std::string image_dir = dataset_path + "images/train/";
+    std::string label_dir = dataset_path + "labels/train/";
 
     for (const auto& entry : std::filesystem::directory_iterator(image_dir)) {
-        path = entry.path().string();
+        path_to_image = entry.path().string();
 
-        image = cv::imread(path, cv::IMREAD_COLOR);
+        image = cv::imread(path_to_image, cv::IMREAD_COLOR);
         if (image.empty()) {
-            std::cerr << "Corrupt image " << path << std::endl;
+            std::cerr << "Failed to load the image " << path_to_image << std::endl;
             continue;
         }
 
-        std::filesystem::path file_label(path);
+        std::filesystem::path file_label(path_to_image);
         std::ifstream file(label_dir + file_label.stem().string() + ".txt");
         if (!file.is_open()) {
-            std::cerr << "Failed to open label file for " << path << std::endl;
+            std::cerr << "Failed to open label file for " << path_to_image << std::endl;
             continue;
         }
 

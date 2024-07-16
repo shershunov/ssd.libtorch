@@ -9,9 +9,7 @@ find_package(Torch REQUIRED)
 set(OpenCV_DIR "C:/Program Files/opencv/build")
 find_package(OpenCV REQUIRED)
 
-
-add_executable(${PROJECT_NAME} "main.cpp" "train/train.h" "train/train.cpp" "model/model.h" "model/model.cpp" "utils/dataloader.h" "utils/dataloader.cpp" "utils/test.h" "utils/test.cpp" "train/loss.h" "train/loss.cpp"   "utils/utils.cpp")
-
+add_executable(${PROJECT_NAME} "main.cpp" "train/train.h" "train/train.cpp" "model/model.h" "model/model.cpp" "utils/dataloader.h" "utils/dataloader.cpp" "utils/test.h" "utils/test.cpp" "train/loss.h" "train/loss.cpp" "utils/utils.cpp")
 
 if(MSVC)
   file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
