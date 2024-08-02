@@ -1,6 +1,7 @@
 # Single Shot Multibox Detector (SSD) with LibTorch in C++
 
-This repository contains an implementation of the Single Shot Multibox Detector (SSD) using LibTorch. SSD is a popular model for real-time object detection in images.<br>
+This repository contains an implementation of the Single Shot Multibox Detector (SSD) using LibTorch. 
+<br>SSD is a popular model for real-time object detection in images.<br><br>
 <img width=40% src="https://github.com/user-attachments/assets/9883b787-6b50-4584-ae1b-9633f20873a8"/>
 
 ## Features
