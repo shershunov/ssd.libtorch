@@ -1,4 +1,5 @@
 #include "model.h"
+#include <cmath>
 
 int64_t make_divisible(int64_t x, int64_t divisor) {
     return (x + divisor / 2) / divisor * divisor;
@@ -43,91 +44,104 @@ torch::Tensor C3::forward(torch::Tensor& x) {
     return conv3->forward(y);
 }
 
-Net::Net(int64_t num_classes, int64_t num_anchors, float depth_multiple, float width_multiple) : num_classes(num_classes), num_anchors(num_anchors)  {
-    int64_t p1_out_channels = make_divisible(64 * width_multiple, 8);
-    p1 = register_module("p1", std::make_shared<ConvBNSiLU>(3, p1_out_channels, 6, 2, 2));
+Net::Net(int64_t num_classes, int64_t num_anchors, float depth_multiple, float width_multiple) : num_classes(num_classes), num_anchors(num_anchors) {
+    int64_t p1_out = make_divisible(64 * width_multiple, 8);
+    p1 = register_module("p1", std::make_shared<ConvBNSiLU>(3, p1_out, 6, 2, 2));
 
-    int64_t p2_out_channels = make_divisible(128 * width_multiple, 8);
-    p2 = register_module("p2", std::make_shared<ConvBNSiLU>(p1_out_channels, p2_out_channels, 3, 2, 1));
+    int64_t p2_out = make_divisible(128 * width_multiple, 8);
+    p2 = register_module("p2", std::make_shared<ConvBNSiLU>(p1_out, p2_out, 3, 2, 1));
 
-    c3_1 = register_module("c3_1", std::make_shared<C3>(p2_out_channels, p2_out_channels, 3, depth_multiple));
+    c3_1 = register_module("c3_1", std::make_shared<C3>(p2_out, p2_out, 3, depth_multiple));
 
-    int64_t p3_out_channels = make_divisible(256 * width_multiple, 8);
-    p3 = register_module("p3", std::make_shared<ConvBNSiLU>(p2_out_channels, p3_out_channels, 3, 2, 1));
+    int64_t p3_out = make_divisible(256 * width_multiple, 8);
+    p3 = register_module("p3", std::make_shared<ConvBNSiLU>(p2_out, p3_out, 3, 2, 1));
 
-    c3_2 = register_module("c3_2", std::make_shared<C3>(p3_out_channels, p3_out_channels, 6, depth_multiple));
+    c3_2 = register_module("c3_2", std::make_shared<C3>(p3_out, p3_out, 6, depth_multiple));
 
-    int64_t p4_out_channels = make_divisible(512 * width_multiple, 8);
-    p4 = register_module("p4", std::make_shared<ConvBNSiLU>(p3_out_channels, p4_out_channels, 3, 2, 1));
+    int64_t p4_out = make_divisible(512 * width_multiple, 8);
+    p4 = register_module("p4", std::make_shared<ConvBNSiLU>(p3_out, p4_out, 3, 2, 1));
 
-    c3_3 = register_module("c3_3", std::make_shared<C3>(p4_out_channels, p4_out_channels, 9, depth_multiple));
+    c3_3 = register_module("c3_3", std::make_shared<C3>(p4_out, p4_out, 9, depth_multiple));
 
-    int64_t p5_out_channels = make_divisible(1024 * width_multiple, 8);
-    p5 = register_module("p5", std::make_shared<ConvBNSiLU>(p4_out_channels, p5_out_channels, 3, 2, 1));
+    int64_t p5_out = make_divisible(1024 * width_multiple, 8);
+    p5 = register_module("p5", std::make_shared<ConvBNSiLU>(p4_out, p5_out, 3, 2, 1));
 
-    c3_4 = register_module("c3_4", std::make_shared<C3>(p5_out_channels, p5_out_channels, 3, depth_multiple));
+    c3_4 = register_module("c3_4", std::make_shared<C3>(p5_out, p5_out, 3, depth_multiple));
 
-    int64_t p6_out_channels = make_divisible(1024 * width_multiple, 8);
-    p6 = register_module("p6", std::make_shared<ConvBNSiLU>(p5_out_channels, p6_out_channels, 1, 1, 0));
+    loc_head_s = register_module("loc_head_s", torch::nn::Conv2d(torch::nn::Conv2dOptions(p3_out, num_anchors * 4, 3).padding(1)));
+    conf_head_s = register_module("conf_head_s", torch::nn::Conv2d(torch::nn::Conv2dOptions(p3_out, num_anchors * num_classes, 3).padding(1)));
 
-    c3_5 = register_module("c3_5", std::make_shared<C3>(p6_out_channels, p6_out_channels, 3, depth_multiple));
+    loc_head_m = register_module("loc_head_m", torch::nn::Conv2d(torch::nn::Conv2dOptions(p4_out, num_anchors * 4, 3).padding(1)));
+    conf_head_m = register_module("conf_head_m", torch::nn::Conv2d(torch::nn::Conv2dOptions(p4_out, num_anchors * num_classes, 3).padding(1)));
 
-    int64_t p7_out_channels = make_divisible(1024 * width_multiple, 8);
-    p7 = register_module("p7", std::make_shared<ConvBNSiLU>(p6_out_channels, p7_out_channels, 1, 1, 0));
+    loc_head_l = register_module("loc_head_l", torch::nn::Conv2d(torch::nn::Conv2dOptions(p5_out, num_anchors * 4, 3).padding(1)));
+    conf_head_l = register_module("conf_head_l", torch::nn::Conv2d(torch::nn::Conv2dOptions(p5_out, num_anchors * num_classes, 3).padding(1)));
 
-    c3_6 = register_module("c3_6", std::make_shared<C3>(p7_out_channels, p7_out_channels, 3, depth_multiple));
-
-    int64_t p8_out_channels = make_divisible(1024 * width_multiple, 8);
-    p8 = register_module("p8", std::make_shared<ConvBNSiLU>(p7_out_channels, p8_out_channels, 1, 1, 0));
-    p9 = register_module("p9", std::make_shared<ConvBNSiLU>(p8_out_channels, p8_out_channels, 1, 1, 0));
-    p10 = register_module("p10", std::make_shared<ConvBNSiLU>(p8_out_channels, p8_out_channels, 1, 1, 0));
-
-    loc_layers = register_module("loc_layers", torch::nn::ModuleList());
-    conf_layers = register_module("conf_layers", torch::nn::ModuleList());
-
-    for (int i = 0; i < num_anchors; ++i) {
-        loc_layers->push_back(register_module("loc_" + std::to_string(i), torch::nn::Conv2d(p8_out_channels, 4 * num_anchors, 1)));
-        conf_layers->push_back(register_module("conf_" + std::to_string(i), torch::nn::Conv2d(p8_out_channels, num_classes * num_anchors, 1)));
-    }
+    initialize_weights();
 }
 
 std::pair<torch::Tensor, torch::Tensor> Net::forward(torch::Tensor& x) {
+    int64_t B = x.size(0);
+
     x = p1->forward(x);
     x = p2->forward(x);
     x = c3_1->forward(x);
 
     x = p3->forward(x);
     x = c3_2->forward(x);
+    auto feat_s = x;
 
     x = p4->forward(x);
     x = c3_3->forward(x);
+    auto feat_m = x;
 
     x = p5->forward(x);
     x = c3_4->forward(x);
+    auto feat_l = x;
 
-    x = p6->forward(x);
+    auto reshape = [B](torch::Tensor x, int64_t d) {
+        return x.permute({ 0, 2, 3, 1 }).contiguous().view({ B, -1, d });
+    };
 
-    x = c3_5->forward(x);
+    auto loc_s = reshape(loc_head_s->forward(feat_s), 4);
+    auto loc_m = reshape(loc_head_m->forward(feat_m), 4);
+    auto loc_l = reshape(loc_head_l->forward(feat_l), 4);
 
-    x = p7->forward(x);
+    auto conf_s = reshape(conf_head_s->forward(feat_s), num_classes);
+    auto conf_m = reshape(conf_head_m->forward(feat_m), num_classes);
+    auto conf_l = reshape(conf_head_l->forward(feat_l), num_classes);
 
-    x = c3_6->forward(x);
+    auto loc_preds = torch::cat({ loc_s, loc_m, loc_l }, 1);
+    auto conf_preds = torch::cat({ conf_s, conf_m, conf_l }, 1);
 
-    x = p8->forward(x);
-    x = p9->forward(x);
-    x = p10->forward(x);
+    return { loc_preds, conf_preds };
+}
 
-    std::vector<torch::Tensor> loc_preds, conf_preds;
-    for (int i = 0; i < loc_layers->size(); ++i) {
-        loc_preds.push_back((*loc_layers)[i]->as<torch::nn::Conv2d>()->forward(x));
-        conf_preds.push_back((*conf_layers)[i]->as<torch::nn::Conv2d>()->forward(x));
+void Net::initialize_weights() {
+    for (auto& module : modules(false)) {
+        if (auto* conv = module->as<torch::nn::Conv2dImpl>()) {
+            torch::nn::init::kaiming_normal_(conv->weight, 0.0, torch::kFanOut, torch::kLeakyReLU);
+            if (conv->bias.defined()) {
+                torch::nn::init::zeros_(conv->bias);
+            }
+        }
+        else if (auto* bn = module->as<torch::nn::BatchNorm2dImpl>()) {
+            torch::nn::init::ones_(bn->weight);
+            torch::nn::init::zeros_(bn->bias);
+        }
     }
 
-    torch::Tensor loc_preds_tensor = torch::cat(loc_preds, 2);
-    torch::Tensor conf_preds_tensor = torch::cat(conf_preds, 2);
+    for (auto& head : { conf_head_s, conf_head_m, conf_head_l }) {
+        torch::nn::init::normal_(head->weight, 0.0, 0.01);
+        torch::nn::init::zeros_(head->bias);
+        {
+            torch::NoGradGuard no_grad;
+            head->bias.view({num_anchors, num_classes}).select(1, 0).fill_(4.6f);
+        }
+    }
 
-    loc_preds_tensor = loc_preds_tensor.view({ loc_preds_tensor.size(0), -1, 4 });
-    conf_preds_tensor = conf_preds_tensor.view({ conf_preds_tensor.size(0), -1, num_classes });
-
-    return { loc_preds_tensor, conf_preds_tensor };
+    for (auto& head : { loc_head_s, loc_head_m, loc_head_l }) {
+        torch::nn::init::normal_(head->weight, 0.0, 0.01);
+        torch::nn::init::zeros_(head->bias);
+    }
 }

@@ -34,11 +34,13 @@ public:
 
     std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor& x);
 
-private: 
+    void initialize_weights();
+
+private:
     int64_t num_classes;
     int64_t num_anchors;
-    torch::nn::ModuleList loc_layers, conf_layers;
-    torch::nn::MaxPool2d maxpool{ nullptr };
-    std::shared_ptr<ConvBNSiLU> p1, p2, p3, p4, p5, p6, p7, p8, p9, p10;
-    std::shared_ptr<C3> c3_1, c3_2, c3_3, c3_4, c3_5, c3_6;
+    std::shared_ptr<ConvBNSiLU> p1, p2, p3, p4, p5;
+    std::shared_ptr<C3> c3_1, c3_2, c3_3, c3_4;
+    torch::nn::Conv2d loc_head_s{ nullptr }, loc_head_m{ nullptr }, loc_head_l{ nullptr };
+    torch::nn::Conv2d conf_head_s{ nullptr }, conf_head_m{ nullptr }, conf_head_l{ nullptr };
 };
