@@ -3,13 +3,17 @@ project(ysme)
 
 set(CMAKE_CXX_STANDARD 17)
 
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --allow-unsupported-compiler")
+
 set(Torch_DIR "C:/Program Files/libtorch/share/cmake/Torch")
 find_package(Torch REQUIRED)
 
 set(OpenCV_DIR "C:/Program Files/opencv/build")
+set(OpenCV_RUNTIME "vc16")
+set(OpenCV_ARCH "x64")
 find_package(OpenCV REQUIRED)
 
-add_executable(${PROJECT_NAME} "main.cpp" "train/train.h" "train/train.cpp" "model/model.h" "model/model.cpp" "utils/dataloader.h" "utils/dataloader.cpp" "utils/test.h" "utils/test.cpp" "train/loss.h" "train/loss.cpp" "utils/utils.cpp")
+add_executable(${PROJECT_NAME} "main.cpp" "train/train.h" "train/train.cpp" "model/model.h" "model/model.cpp" "utils/dataloader.h" "utils/dataloader.cpp" "utils/test.h" "utils/test.cpp" "train/loss.h" "train/loss.cpp" "utils/utils.cpp" "utils/metrics.h" "utils/metrics.cpp" "utils/anchors.h" "utils/anchors.cpp")
 
 if(MSVC)
   file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
@@ -23,4 +27,4 @@ endif(MSVC)
 
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${TORCH_LIBRARIES})
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
-file(COPY "C:/Program Files/opencv/build/x64/vc16/bin/opencv_world490d.dll" DESTINATION ${CMAKE_BINARY_DIR})
+file(COPY "C:/Program Files/opencv/build/x64/vc16/bin/opencv_world4120d.dll" DESTINATION ${CMAKE_BINARY_DIR})
