@@ -1,125 +1,140 @@
 #include "loss.h"
-#include "../utils/utils.h"
 
+namespace {
 
-torch::Tensor iou(const torch::Tensor& boxesA, const torch::Tensor& boxesB) {
-    torch::Tensor boxesA_exp = boxesA.unsqueeze(1);
-    torch::Tensor boxesB_exp = boxesB.unsqueeze(0);
+torch::Tensor batch_xywh_to_xyxy(const torch::Tensor& boxes) {
+    auto x = boxes.select(-1, 0);
+    auto y = boxes.select(-1, 1);
+    auto hw = boxes.select(-1, 2) * 0.5f;
+    auto hh = boxes.select(-1, 3) * 0.5f;
+    return torch::stack({ x - hw, y - hh, x + hw, y + hh }, -1);
+}
 
-    torch::Tensor xA = torch::max(boxesA_exp.select(2, 0), boxesB_exp.select(2, 0));
-    torch::Tensor yA = torch::max(boxesA_exp.select(2, 1), boxesB_exp.select(2, 1));
-    torch::Tensor xB = torch::min(boxesA_exp.select(2, 2), boxesB_exp.select(2, 2));
-    torch::Tensor yB = torch::min(boxesA_exp.select(2, 3), boxesB_exp.select(2, 3));
+torch::Tensor batch_iou(const torch::Tensor& a, const torch::Tensor& b) {
+    auto a_exp = a.unsqueeze(2);
+    auto b_exp = b.unsqueeze(1);
 
-    torch::Tensor interWidth = torch::clamp(xB - xA + 1, 0, std::numeric_limits<float>::infinity());
-    torch::Tensor interHeight = torch::clamp(yB - yA + 1, 0, std::numeric_limits<float>::infinity());
-    torch::Tensor interArea = interWidth * interHeight;
+    auto inter_w = torch::clamp_min(
+        torch::min(a_exp.select(-1, 2), b_exp.select(-1, 2)) -
+        torch::max(a_exp.select(-1, 0), b_exp.select(-1, 0)), 0);
+    auto inter_h = torch::clamp_min(
+        torch::min(a_exp.select(-1, 3), b_exp.select(-1, 3)) -
+        torch::max(a_exp.select(-1, 1), b_exp.select(-1, 1)), 0);
+    auto inter = inter_w * inter_h;
 
-    torch::Tensor boxesAArea = (boxesA.select(1, 2) - boxesA.select(1, 0) + 1) * (boxesA.select(1, 3) - boxesA.select(1, 1) + 1);
-    torch::Tensor boxesBArea = (boxesB.select(1, 2) - boxesB.select(1, 0) + 1) * (boxesB.select(1, 3) - boxesB.select(1, 1) + 1);
+    auto area_a = (a.select(-1, 2) - a.select(-1, 0)) * (a.select(-1, 3) - a.select(-1, 1));
+    auto area_b = (b.select(-1, 2) - b.select(-1, 0)) * (b.select(-1, 3) - b.select(-1, 1));
+    auto uni = area_a.unsqueeze(2) + area_b.unsqueeze(1) - inter;
 
-    torch::Tensor boxesAArea_exp = boxesAArea.unsqueeze(1);
-    torch::Tensor boxesBArea_exp = boxesBArea.unsqueeze(0);
+    return inter / torch::clamp_min(uni, 1e-6f);
+}
 
-    torch::Tensor unionArea = boxesAArea_exp + boxesBArea_exp - interArea;
-
-    unionArea = torch::max(unionArea, torch::ones_like(unionArea) * 1e-6);
-
-    torch::Tensor iou = interArea / unionArea;
-
-    return iou;
 }
 
 torch::Tensor ssd_loss(
-    const torch::Tensor& pred_boxes,
+    const torch::Tensor& pred_offsets,
     const torch::Tensor& pred_labels,
-    const std::vector<torch::Tensor>& targets) {
+    const std::vector<torch::Tensor>& targets,
+    const torch::Tensor& anchors) {
 
-    torch::Device device = pred_boxes.device();
+    auto device = pred_offsets.device();
+    int64_t B = pred_offsets.size(0);
+    int64_t N = pred_offsets.size(1);
 
-    std::vector<torch::Tensor> true_boxes, true_labels;
+    constexpr float iou_threshold = 0.5f;
+    constexpr float neg_pos_ratio = 3.0f;
 
-    for (const auto& target : targets) {
-        true_boxes.push_back(target.slice(-1, 0, 4).to(device));
-        true_labels.push_back(target.narrow(-1, -1, 1).squeeze(1).to(device));
+    int64_t M = 0;
+    for (int64_t i = 0; i < B; ++i)
+        M = std::max(M, targets[i].size(0));
+
+    if (M == 0) {
+        auto conf_targets = torch::zeros({ B * N }, torch::TensorOptions().dtype(torch::kLong).device(device));
+        return torch::nn::functional::cross_entropy(
+            pred_labels.reshape({ B * N, -1 }),
+            conf_targets,
+            torch::nn::functional::CrossEntropyFuncOptions().reduction(torch::kMean));
     }
 
-    int num_batches = pred_boxes.size(0);
+    auto gt_padded = torch::zeros({ B, M, 5 }, torch::TensorOptions().device(device));
+    auto gt_valid = torch::zeros({ B, M }, torch::TensorOptions().dtype(torch::kBool).device(device));
 
-    torch::Tensor total_loc_loss = torch::zeros({ 1 }, torch::TensorOptions().device(device));
-    torch::Tensor total_conf_loss = torch::zeros({ 1 }, torch::TensorOptions().device(device));
-
-    const float overlap_threshold = 0.5F;
-    const float neg_pos_ratio = 3.0F;
-    const float loc_loss_weight = 1.0F;
-    const float conf_loss_weight = 1.0F;
-
-    for (int i = 0; i < num_batches; ++i) {
-        torch::Tensor current_true_boxes = xywh_to_xyxy(true_boxes[i]); // [num_real_boxes, 4] (xyxy)
-        torch::Tensor current_true_labels = true_labels[i]; // [num_real_boxes] class indices
-        torch::Tensor current_pred_boxes = xywh_to_xyxy(pred_boxes[i]); // [num_pred_boxes, 4] (xyxy)
-        torch::Tensor current_pred_labels = pred_labels[i]; // [num_pred_boxes, num_classes] class probabilities
-
-        torch::Tensor ious = iou(current_pred_boxes, current_true_boxes); // [num_anchors, num_real_boxes]
-        std::tuple< torch::Tensor, torch::Tensor > max_iou_results = ious.max(1);
-        torch::Tensor max_iou = std::get<0>(max_iou_results);
-        torch::Tensor max_iou_idx = std::get<1>(max_iou_results);
-
-        torch::Tensor positive_mask = max_iou >= overlap_threshold;
-        torch::Tensor negative_mask = max_iou < overlap_threshold;
-
-        int num_positives = positive_mask.sum().item<int>();
-        int num_negatives = negative_mask.sum().item<int>();
-
-        if (num_positives > 0) {
-            torch::Tensor positive_pred_boxes = current_pred_boxes.index({ positive_mask });
-            torch::Tensor positive_true_boxes = current_true_boxes.index({ max_iou_idx.index({ positive_mask }) });
-
-            torch::Tensor loc_loss = torch::nn::functional::smooth_l1_loss(
-                positive_pred_boxes,
-                positive_true_boxes,
-                torch::nn::functional::SmoothL1LossFuncOptions().reduction(torch::kSum)
-            );
-
-            total_loc_loss += loc_loss_weight * loc_loss;
-
-            torch::Tensor positive_pred_labels = current_pred_labels.index({ positive_mask });
-            torch::Tensor positive_true_labels = current_true_labels.index({ max_iou_idx.index({ positive_mask }) }).to(torch::kLong);
-
-            torch::Tensor conf_loss_pos = torch::nn::functional::cross_entropy(
-                positive_pred_labels,
-                positive_true_labels,
-                torch::nn::functional::CrossEntropyFuncOptions().reduction(torch::kSum)
-            );
-
-            total_conf_loss += conf_loss_weight * conf_loss_pos;
-        }
-
-        if (num_negatives > 0) {
-            torch::Tensor negative_pred_labels = current_pred_labels.index({ negative_mask });
-
-            torch::Tensor conf_loss_neg_all = torch::nn::functional::cross_entropy(
-                negative_pred_labels,
-                torch::zeros({ negative_pred_labels.size(0) }, torch::TensorOptions().dtype(torch::kLong).device(device)),
-                torch::nn::functional::CrossEntropyFuncOptions().reduction(torch::kNone)
-            );
-
-            auto [sorted_neg_conf_loss, sorted_neg_indices] = conf_loss_neg_all.sort(0, true);
-
-            int num_neg = std::min(static_cast<int>(num_positives * neg_pos_ratio), static_cast<int>(sorted_neg_indices.size(0)));
-            if (num_neg == 0) {
-                num_neg = std::min(static_cast<int>(neg_pos_ratio), static_cast<int>(sorted_neg_indices.size(0)));
-            }
-
-            torch::Tensor hard_neg_indices = sorted_neg_indices.slice(0, 0, num_neg);
-            torch::Tensor hard_neg_conf_loss = conf_loss_neg_all.index({ hard_neg_indices });
-
-            torch::Tensor conf_loss_neg = hard_neg_conf_loss.sum();
-
-            total_conf_loss += conf_loss_weight * conf_loss_neg;
+    for (int64_t i = 0; i < B; ++i) {
+        int64_t n = targets[i].size(0);
+        if (n > 0) {
+            gt_padded[i].slice(0, 0, n).copy_(targets[i].to(device));
+            gt_valid[i].slice(0, 0, n).fill_(true);
         }
     }
 
-    torch::Tensor total_loss = total_loc_loss + total_conf_loss;
-    return total_loss;
+    auto gt_boxes = gt_padded.slice(2, 0, 4);
+    auto gt_labels = gt_padded.select(2, 4).to(torch::kLong);
+
+    auto anchors_dev = anchors.to(device);
+    auto anchors_xyxy = batch_xywh_to_xyxy(anchors_dev).unsqueeze(0).expand({ B, N, 4 });
+    auto gt_xyxy = batch_xywh_to_xyxy(gt_boxes);
+
+    auto ious = batch_iou(anchors_xyxy, gt_xyxy);
+    ious.masked_fill_(~gt_valid.unsqueeze(1), -1.0f);
+
+    auto [max_iou, max_gt_idx] = ious.max(2);
+    auto pos_mask = max_iou >= iou_threshold;
+
+    auto [best_anchor_iou, best_anchor_idx] = ious.max(1);
+    auto gt_indices = torch::arange(M, torch::TensorOptions().dtype(torch::kLong).device(device)).unsqueeze(0).expand({ B, M });
+    pos_mask.scatter_(1, best_anchor_idx, gt_valid);
+    max_gt_idx.scatter_(1, best_anchor_idx, gt_indices);
+
+    auto pos_f = pos_mask.to(torch::kFloat);
+
+    auto matched_gt_boxes = torch::gather(gt_boxes, 1, max_gt_idx.unsqueeze(2).expand({ B, N, 4 }));
+    auto anchors_expanded = anchors_dev.unsqueeze(0).expand({ B, N, 4 });
+
+    auto gx = matched_gt_boxes.select(2, 0);
+    auto gy = matched_gt_boxes.select(2, 1);
+    auto gw = matched_gt_boxes.select(2, 2);
+    auto gh = matched_gt_boxes.select(2, 3);
+
+    auto ax = anchors_expanded.select(2, 0);
+    auto ay = anchors_expanded.select(2, 1);
+    auto aw = anchors_expanded.select(2, 2);
+    auto ah = anchors_expanded.select(2, 3);
+
+    auto tx = (gx - ax) / aw / 0.1f;
+    auto ty = (gy - ay) / ah / 0.1f;
+    auto tw = torch::log(torch::clamp_min(gw / aw, 1e-6f)) / 0.2f;
+    auto th = torch::log(torch::clamp_min(gh / ah, 1e-6f)) / 0.2f;
+
+    auto target_offsets = torch::stack({ tx, ty, tw, th }, 2);
+
+    auto loc_loss_elem = torch::nn::functional::smooth_l1_loss(
+        pred_offsets, target_offsets,
+        torch::nn::functional::SmoothL1LossFuncOptions().reduction(torch::kNone));
+    auto loc_loss = (loc_loss_elem.sum(2) * pos_f).sum();
+
+    auto matched_labels = torch::gather(gt_labels, 1, max_gt_idx);
+    auto conf_targets = torch::where(pos_mask, matched_labels, torch::zeros_like(matched_labels));
+
+    auto conf_loss_all = torch::nn::functional::cross_entropy(
+        pred_labels.reshape({ B * N, -1 }),
+        conf_targets.reshape({ B * N }),
+        torch::nn::functional::CrossEntropyFuncOptions().reduction(torch::kNone)
+    ).reshape({ B, N });
+
+    auto pos_conf_loss = (conf_loss_all * pos_f).sum();
+
+    auto neg_mask = ~pos_mask;
+    auto num_pos = pos_mask.sum(1).to(torch::kFloat);
+    auto num_neg_limit = torch::clamp_min(num_pos * neg_pos_ratio, neg_pos_ratio).to(torch::kLong);
+
+    auto neg_scores = conf_loss_all * neg_mask.to(torch::kFloat);
+    auto sorted_neg = std::get<0>(neg_scores.sort(1, true));
+
+    auto ranks = torch::arange(N, torch::TensorOptions().device(device)).unsqueeze(0);
+    auto neg_mining_mask = ranks < num_neg_limit.unsqueeze(1);
+
+    auto neg_conf_loss = (sorted_neg * neg_mining_mask.to(torch::kFloat)).sum();
+
+    auto total_pos = torch::clamp_min(pos_mask.sum().to(torch::kFloat), 1.0f);
+    return (loc_loss + pos_conf_loss + neg_conf_loss) / total_pos;
 }
